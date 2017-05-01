@@ -1,0 +1,3 @@
+# untangular
+
+> AngularJS template linting
