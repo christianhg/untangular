@@ -1,5 +1,6 @@
 {
   "name": "untangular",
+  "description": "AngularJS template linting",
   "version": "0.1.0",
   "bin": {
     "untangular": "./index.js"
