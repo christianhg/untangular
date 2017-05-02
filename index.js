@@ -62,28 +62,18 @@ const getTemplateMethodName = controllerAs =>
       .replace(`${controllerAs}.`, '')
       .replace(/\(.*\)/, '')
 
-const getControllerMethodSync = ({ controllerAs, name, path }) =>
+const getTemplateMethodControllerAppearances = ({ controllerAs }) =>
   methods =>
     templateMethods =>
-      ({
-        name,
-        path,
-        sync: templateMethods
-          .map(getTemplateMethodName(controllerAs))
-          .map(templateMethodName =>
-            ({
-              controllerAppearances: methods
-                .map(method => method.search(templateMethodName))
-                .filter(index => index > 0),
-              templateMethodName
-            })
-          )
-          .map(({ controllerAppearances, templateMethodName }) =>
-            controllerAppearances.length > 0
-              ? success(`${bold(`${controllerAs}.${templateMethodName}()`)} is found in controller`)
-              : warning(`${bold(`${controllerAs}.${templateMethodName}()`)} is not found in controller`)
-          )
-      })
+      templateMethods
+        .map(getTemplateMethodName(controllerAs))
+        .map(templateMethodName =>
+          ({
+            controllerAppearances: methods
+              .map(method => method.search(templateMethodName))
+              .filter(index => index > 0),
+            templateMethodName
+          }))
 
 const fileToController = ({ content, path }) =>
   name =>
@@ -118,16 +108,37 @@ const untangular = pattern => {
     }
 
     pathsToControllers(paths)
-      .map(controller => Maybe.of(getControllerMethodSync)
-        .ap(controller)
-        .ap(controller.chain(getControllerMethods))
-        .ap(controller.chain(getControllerTemplateMethods)))
-      .map(controller => controller.getOrElse(undefined))
-      .filter(controller => controller !== undefined)
-      .forEach(controller => {
+      .map(controller => ({
+        controller,
+        templateMethodControllerAppearances: Maybe.of(getTemplateMethodControllerAppearances)
+          .ap(controller)
+          .ap(controller.chain(getControllerMethods))
+          .ap(controller.chain(getControllerTemplateMethods))
+      }))
+      .map(({ controller, templateMethodControllerAppearances }) => ({
+        controller: controller.getOrElse(undefined),
+        templateMethodControllerAppearances: templateMethodControllerAppearances.getOrElse(undefined)
+      }))
+      .filter(({ controller, templateMethodControllerAppearances }) =>
+        controller !== undefined && templateMethodControllerAppearances !== undefined)
+      .map(({ controller, templateMethodControllerAppearances }) => ({
+        controller,
+        templateMethodControllerAppearances: {
+          found: templateMethodControllerAppearances
+            .filter(({ controllerAppearances }) => controllerAppearances.length > 0)
+            .map(({ templateMethodName }) =>
+              success(`${bold(`${controller.controllerAs}.${templateMethodName}()`)} is found in controller`)),
+          notFound: templateMethodControllerAppearances
+            .filter(({ controllerAppearances }) => controllerAppearances.length < 1)
+            .map(({ templateMethodName }) =>
+              warning(`${bold(`${controller.controllerAs}.${templateMethodName}()`)} is not found in controller`))
+        }
+      }))
+      .filter(({ templateMethodControllerAppearances }) => templateMethodControllerAppearances.notFound.length > 0)
+      .forEach(({ controller, templateMethodControllerAppearances }) => {
         log(`${bold(controller.name)} (${controller.path})`)
-        controller.sync
-          .forEach(sync => log(`  ${sync}`))
+        templateMethodControllerAppearances.notFound
+          .forEach(warning => log(`  ${warning}`))
         log()
       })
   })
