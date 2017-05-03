@@ -137,8 +137,9 @@ const untangular = pattern => {
       .filter(({ templateMethodControllerAppearances }) => templateMethodControllerAppearances.notFound.length > 0)
       .forEach(({ controller, templateMethodControllerAppearances }) => {
         log(`${bold(controller.name)} (${controller.path})`)
+
         templateMethodControllerAppearances.notFound
-          .forEach(warning => log(`  ${warning}`))
+          .forEach(warning => log(`- ${warning}`))
         log()
       })
   })
