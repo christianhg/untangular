@@ -5,6 +5,7 @@ const fs = require('fs')
 const glob = require('glob')
 const Maybe = require('folktale/data/maybe')
 const program = require('commander')
+const { compose, path, prop } = require('ramda')
 
 const log = console.log
 const bold = chalk.bold
@@ -19,6 +20,17 @@ const controllerTemplateMethodsPattern = controllerAs =>
 const controllerNamePattern = /public controller: any = (.*);/
 const templateUrlPattern = /public templateUrl: string = '(.*)';/
 const templateUrlRoot = './app/'
+
+// gtZero :: Number -> Boolean
+const gtZero = x => x > 0
+
+// empty :: [a] -> Boolean
+const empty = xs => xs.length === 0
+
+// notEmpty :: [a] -> Boolean
+const notEmpty = xs => xs.length > 0
+
+const searchString = regex => s => s.search(regex)
 
 const findInFile = ({ content }) =>
   regex =>
@@ -69,9 +81,9 @@ const getTemplateMethodControllerAppearances = ({ controllerAs }) =>
         .map(getTemplateMethodName(controllerAs))
         .map(templateMethodName =>
           ({
-            controllerAppearances: methods
-              .map(method => method.search(templateMethodName))
-              .filter(index => index > 0),
+            appearances: methods
+              .map(searchString(templateMethodName))
+              .filter(gtZero),
             templateMethodName
           }))
 
@@ -110,35 +122,40 @@ const untangular = pattern => {
     pathsToControllers(paths)
       .map(controller => ({
         controller,
-        templateMethodControllerAppearances: Maybe.of(getTemplateMethodControllerAppearances)
+        templateMethodAppearances: Maybe.of(getTemplateMethodControllerAppearances)
           .ap(controller)
           .ap(controller.chain(getControllerMethods))
           .ap(controller.chain(getControllerTemplateMethods))
       }))
-      .map(({ controller, templateMethodControllerAppearances }) => ({
+      .map(({ controller, templateMethodAppearances }) => ({
         controller: controller.getOrElse(undefined),
-        templateMethodControllerAppearances: templateMethodControllerAppearances.getOrElse(undefined)
+        templateMethodAppearances: templateMethodAppearances.getOrElse(undefined)
       }))
-      .filter(({ controller, templateMethodControllerAppearances }) =>
-        controller !== undefined && templateMethodControllerAppearances !== undefined)
-      .map(({ controller, templateMethodControllerAppearances }) => ({
+      .filter(({ controller, templateMethodAppearances }) =>
+        controller !== undefined && templateMethodAppearances !== undefined)
+      .map(({ controller, templateMethodAppearances }) => ({
         controller,
-        templateMethodControllerAppearances: {
-          found: templateMethodControllerAppearances
-            .filter(({ controllerAppearances }) => controllerAppearances.length > 0)
+        templateMethodAppearances: {
+          found: templateMethodAppearances.filter(compose(notEmpty, prop('appearances'))),
+          notFound: templateMethodAppearances.filter(compose(empty, prop('appearances'))),
+        }
+      }))
+      .map(({ controller, templateMethodAppearances }) => ({
+        controller,
+        templateMethodAppearances: {
+          found: templateMethodAppearances.found
             .map(({ templateMethodName }) =>
               success(`${bold(`${controller.controllerAs}.${templateMethodName}()`)} is found in controller`)),
-          notFound: templateMethodControllerAppearances
-            .filter(({ controllerAppearances }) => controllerAppearances.length < 1)
+          notFound: templateMethodAppearances.notFound
             .map(({ templateMethodName }) =>
               warning(`${bold(`${controller.controllerAs}.${templateMethodName}()`)} is not found in controller`))
         }
       }))
-      .filter(({ templateMethodControllerAppearances }) => templateMethodControllerAppearances.notFound.length > 0)
-      .forEach(({ controller, templateMethodControllerAppearances }) => {
+      .filter(compose(notEmpty, path(['templateMethodAppearances', 'notFound'])))
+      .forEach(({ controller, templateMethodAppearances }) => {
         log(`${bold(controller.name)} (${controller.path})`)
 
-        templateMethodControllerAppearances.notFound
+        templateMethodAppearances.notFound
           .forEach(warning => log(`- ${warning}`))
         log()
       })
