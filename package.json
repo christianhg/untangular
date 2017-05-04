@@ -2,6 +2,7 @@
   "name": "untangular",
   "description": "AngularJS template linting",
   "version": "0.1.0",
+  "license": "MIT",
   "bin": {
     "untangular": "./index.js"
   },
